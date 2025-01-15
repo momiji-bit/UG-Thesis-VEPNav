@@ -1,0 +1,336 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="initial-scale=1.0, user-scalable=no, width=device-width">
+    <style>
+    html,
+    body,
+    #container {
+        width: 100%;
+        height: 100%;
+    }
+    #panel {
+        position: fixed;
+        background-color: white;
+        max-height: 90%;
+        overflow-y: auto;
+        top: 10px;
+        right: 10px;
+        width: 280px;
+    }
+    #panel .amap-call {
+        background-color: #009cf9;
+        border-top-left-radius: 4px;
+   	    border-top-right-radius: 4px;
+    }
+    #panel .amap-lib-walking {
+	    border-bottom-left-radius: 4px;
+   	    border-bottom-right-radius: 4px;
+        overflow: hidden;
+    }
+    </style>
+    <title>位置经纬度 + 获取步行规划数据</title>
+    <link rel="stylesheet" href="https://a.amap.com/jsapi_demos/static/demo-center/css/demo-center.css" />
+    <script type="text/javascript"> window._AMapSecurityConfig = {securityJsCode: "aaa4fcbdf20f0034b736d8a507bb9cce",}; </script>
+    <script src="https://webapi.amap.com/maps?v=2.0&key=6a7bb6c35b9a1c699b765d3b415e5e08&plugin=AMap.Walking,AMap.Autocomplete,AMap.Geolocation"></script>
+    <script src="https://a.amap.com/jsapi_demos/static/demo-center/js/demoutils.js"></script>
+</head>
+<body>
+<div id="container"></div>
+<div id="panel"></div>
+<div class="input-card">
+    <h4>左击获取目的地经纬度：</h4>
+    <div class="input-item">
+      <input type="text" readonly="true" id="lnglat">
+    </div>
+</div>
+import sys
+from PyQt5.QtCore import *
+from PyQt5.QtWidgets import *
+from PyQt5.QtWebEngineWidgets import *
+
+
+class CustomWebEnginePage(QWebEnginePage):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+    def featurePermissionRequested(self, url, feature):
+        if feature == QWebEnginePage.Geolocation:
+            self.setFeaturePermission(url, feature, QWebEnginePage.PermissionGrantedByUser)
+
+
+class MapWindow(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("位置经纬度 + 获取步行规划数据")
+        self.setGeometry(100, 100, 1200, 800)
+
+        # 创建WebEngineView
+        self.browser = QWebEngineView()
+        self.setCentralWidget(self.browser)
+
+        # 使用自定义的WebEnginePage
+        self.browser.setPage(CustomWebEnginePage(self.browser))
+
+        # HTML内容
+        html_content = """
+        <!doctype html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <meta http-equiv="X-UA-Compatible" content="IE=edge">
+            <meta name="viewport" content="initial-scale=1.0, user-scalable=no, width=device-width">
+            <style>
+            html,
+            body,
+            #container {
+                width: 100%;
+                height: 100%;
+            }
+            #panel {
+                position: fixed;
+                background-color: white;
+                max-height: 90%;
+                overflow-y: auto;
+                top: 10px;
+                right: 10px;
+                width: 280px;
+            }
+            #panel .amap-call {
+                background-color: #009cf9;
+                border-top-left-radius: 4px;
+                border-top-right-radius: 4px;
+            }
+            #panel .amap-lib-walking {
+                border-bottom-left-radius: 4px;
+                border-bottom-right-radius: 4px;
+                overflow: hidden;
+            }
+            </style>
+            <title>位置经纬度 + 获取步行规划数据</title>
+            <link rel="stylesheet" href="https://a.amap.com/jsapi_demos/static/demo-center/css/demo-center.css" />
+            <script type="text/javascript"> window._AMapSecurityConfig = {securityJsCode: "aaa4fcbdf20f0034b736d8a507bb9cce",}; </script>
+            <script src="https://webapi.amap.com/maps?v=2.0&key=6a7bb6c35b9a1c699b765d3b415e5e08&plugin=AMap.Walking,AMap.Autocomplete,AMap.Geolocation"></script>
+            <script src="https://a.amap.com/jsapi_demos/static/demo-center/js/demoutils.js"></script>
+        </head>
+        <body>
+        <div id="container"></div>
+        <div id="panel"></div>
+        <div class="input-card">
+            <h4>左击获取目的地经纬度：</h4>
+            <div class="input-item">
+              <input type="text" readonly="true" id="lnglat">
+            </div>
+        </div>
+        <script type="text/javascript">
+            var map = new AMap.Map("container", {
+                center: [116.397559, 39.89621],
+                zoom: 14
+            });
+            var walkOption = {
+                map: map,
+                panel: "panel",
+                hideMarkers: false,
+                isOutline: true,
+                outlineColor: '#ffeeee',
+                autoFitView: true
+            }
+            var data_lnglat = [117.204424,31.769715]
+            // 获取用户的当前位置
+            AMap.plugin('AMap.Geolocation', function() {
+                var geolocation = new AMap.Geolocation({
+                    enableHighAccuracy: true,//是否使用高精度定位，默认:true
+                    timeout: 10000,          //超过10秒后停止定位，默认：5s
+                    position:'RB',    //定位按钮的停靠位置
+                    offset: [10, 20], //定位按钮与设置的停靠位置的偏移量，默认：[10, 20]
+                    zoomToAccuracy: true,   //定位成功后是否自动调整地图视野到定位点
+
+                });
+                map.addControl(geolocation);
+                geolocation.getCurrentPosition(function(status,result){
+                    if(status=='complete'){
+                        onComplete(result)
+                    }else{
+                        onError(result)
+                    }
+                });
+            });
+            //解析定位结果
+            function onComplete(data) {
+                var str = [];
+                str.push('定位结果：' + data.position);
+                str.push('定位类别：' + data.location_type);
+                if(data.accuracy){
+                     str.push('精度：' + data.accuracy + ' 米');
+                }//如为IP精确定位结果则没有精度信息
+                str.push('是否经过偏移：' + (data.isConverted ? '是' : '否'));
+                console.log(str.join('<br>'));
+                // 步行导航
+                var walking = new AMap.Walking(walkOption)
+                //为地图注册click事件获取鼠标点击出的经纬度坐标
+                map.on('click', function(e) {
+                    data_lnglat = [data.position.lng, data.position.lat]
+                    document.getElementById("lnglat").value = e.lnglat.getLng() + ',' + e.lnglat.getLat() +  ','+data_lnglat
+                    //根据起终点坐标规划步行路线
+                    walking.search([data.position.lng, data.position.lat], [e.lnglat.getLng(), e.lnglat.getLat()], function(status, result) {
+                        // result即是对应的不行路线数据信息，相关数据结构文档请参考  https://lbs.amap.com/api/javascript-api/reference/route-search#m_RidingResult
+                        if (status === 'complete') {
+                            console.log('步行路线数据查询成功')
+                        } else {
+                            console.log('步行路线数据查询失败' + result)
+                        }
+                    });
+                });
+                geocoder.getLocation('{navigation_destination}',
+                    function(status, result) {
+                        if (status === 'complete' && result.geocodes.length) {
+                            var lnglat = result.geocodes[0].location;
+                                walking.search([data.position.lng, data.position.lat], [lnglat.lng, lnglat.lat], function(status, result) {
+                                // result即是对应的不行路线数据信息，相关数据结构文档请参考  https://lbs.amap.com/api/javascript-api/reference/route-search#m_RidingResult
+                                if (status === 'complete') {
+                                    console.log('步行路线数据查询成功')
+                                } else {
+                                    console.log('步行路线数据查询失败' + result)
+                                }
+                            });
+                        } else {
+                            console.log('根据地址查询位置失败');
+                        }
+                    }
+                );
+
+            }
+            //解析定位错误信息
+            function onError(data) {
+                console.log('定位失败');
+                console.log(data);
+                // 步行导航
+                var walking = new AMap.Walking(walkOption)
+                //为地图注册click事件获取鼠标点击出的经纬度坐标
+                map.on('click', function(e) {
+                    document.getElementById("lnglat").value = e.lnglat.getLng() + ',' + e.lnglat.getLat()
+                    //根据起终点坐标规划步行路线
+                    walking.search([117.204424,31.769715], [e.lnglat.getLng(), e.lnglat.getLat()], function(status, result) {
+                        // result即是对应的不行路线数据信息，相关数据结构文档请参考  https://lbs.amap.com/api/javascript-api/reference/route-search#m_RidingResult
+                        if (status === 'complete') {
+                            console.log('步行路线数据查询成功')
+                        } else {
+                            console.log('步行路线数据查询失败' + result)
+                        }
+                    });
+                });
+            }
+        </script>
+        </body>
+        </html>
+        """
+
+        # 加载HTML内容
+        self.browser.setHtml(html_content)
+
+
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    window = MapWindow()
+    window.show()
+    sys.exit(app.exec_())
+<script type="text/javascript">
+    var map = new AMap.Map("container", {
+        center: [116.397559, 39.89621],
+        zoom: 14
+    });
+    var walkOption = {
+        map: map,
+        panel: "panel",
+        hideMarkers: false,
+        isOutline: true,
+        outlineColor: '#ffeeee',
+        autoFitView: true
+    }
+    var data_lnglat = [117.204424,31.769715]
+    // 获取用户的当前位置
+    AMap.plugin('AMap.Geolocation', function() {
+        var geolocation = new AMap.Geolocation({
+            enableHighAccuracy: true,//是否使用高精度定位，默认:true
+            timeout: 10000,          //超过10秒后停止定位，默认：5s
+            position:'RB',    //定位按钮的停靠位置
+            offset: [10, 20], //定位按钮与设置的停靠位置的偏移量，默认：[10, 20]
+            zoomToAccuracy: true,   //定位成功后是否自动调整地图视野到定位点
+
+        });
+        map.addControl(geolocation);
+        geolocation.getCurrentPosition(function(status,result){
+            if(status=='complete'){
+                onComplete(result)
+            }else{
+                onError(result)
+            }
+        });
+    });
+    //解析定位结果
+    function onComplete(data) {
+        var str = [];
+        str.push('定位结果：' + data.position);
+        str.push('定位类别：' + data.location_type);
+        if(data.accuracy){
+             str.push('精度：' + data.accuracy + ' 米');
+        }//如为IP精确定位结果则没有精度信息
+        str.push('是否经过偏移：' + (data.isConverted ? '是' : '否'));
+        // 步行导航
+        var walking = new AMap.Walking(walkOption)
+        //为地图注册click事件获取鼠标点击出的经纬度坐标
+        map.on('click', function(e) {
+            data_lnglat = [data.position.lng, data.position.lat]
+            document.getElementById("lnglat").value = e.lnglat.getLng() + ',' + e.lnglat.getLat() +  ','+data_lnglat
+            //根据起终点坐标规划步行路线
+            walking.search([data.position.lng, data.position.lat], [e.lnglat.getLng(), e.lnglat.getLat()], function(status, result) {
+                // result即是对应的不行路线数据信息，相关数据结构文档请参考  https://lbs.amap.com/api/javascript-api/reference/route-search#m_RidingResult
+                if (status === 'complete') {
+                    log.success('步行路线数据查询成功')
+                } else {
+                    log.error('步行路线数据查询失败' + result)
+                }
+            });
+        });
+        geocoder.getLocation('{navigation_destination}',
+            function(status, result) {
+                if (status === 'complete' && result.geocodes.length) {
+                    var lnglat = result.geocodes[0].location;
+                        walking.search([data.position.lng, data.position.lat], [lnglat.lng, lnglat.lat], function(status, result) {
+                        // result即是对应的不行路线数据信息，相关数据结构文档请参考  https://lbs.amap.com/api/javascript-api/reference/route-search#m_RidingResult
+                        if (status === 'complete') {
+                            log.success('步行路线数据查询成功')
+                        } else {
+                            log.error('步行路线数据查询失败' + result)
+                        }
+                    });
+                } else {
+                    log.error('根据地址查询位置失败');
+                }
+            }
+        );
+
+    }
+    //解析定位错误信息
+    function onError(data) {
+        // 步行导航
+        var walking = new AMap.Walking(walkOption)
+        //为地图注册click事件获取鼠标点击出的经纬度坐标
+        map.on('click', function(e) {
+            document.getElementById("lnglat").value = e.lnglat.getLng() + ',' + e.lnglat.getLat()
+            //根据起终点坐标规划步行路线
+            walking.search([117.204424,31.769715], [e.lnglat.getLng(), e.lnglat.getLat()], function(status, result) {
+                // result即是对应的不行路线数据信息，相关数据结构文档请参考  https://lbs.amap.com/api/javascript-api/reference/route-search#m_RidingResult
+                if (status === 'complete') {
+                    log.success('步行路线数据查询成功')
+                } else {
+                    log.error('步行路线数据查询失败' + result)
+                }
+            });
+        });
+    }
+</script>
+</body>
+</html>
